@@ -11,8 +11,8 @@ package openapi
 
 import (
 	"context"
-	"net/http"
 	"errors"
+	"net/http"
 )
 
 // CustomerAPIService is a service that implements the logic for the CustomerAPIServicer
