@@ -11,8 +11,11 @@ package openapi
 
 import (
 	"context"
-	"net/http"
 	"errors"
+	"fmt"
+	"net/http"
+
+	"github.com/google/uuid"
 )
 
 // ContractAPIService is a service that implements the logic for the ContractAPIServicer
@@ -39,36 +42,135 @@ func (s *ContractAPIService) CalculateRate(ctx context.Context, rateCalculationR
 
 // CreateContract - Create a new contract
 func (s *ContractAPIService) CreateContract(ctx context.Context, contractReq ContractReq) (ImplResponse, error) {
-	// TODO - update CreateContract with the required logic for this service method.
-	// Add api_contract_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
 
-	// TODO: Uncomment the next line to return response Response(201, ContractRes{}) or use other options such as http.Ok ...
-	// return Response(201, ContractRes{}), nil
+	// Retrieve database credentials
+	db, err := connectToDB()
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), fmt.Errorf("error connecting to database: %v", err)
+	}
+	defer db.Close()
 
-	// TODO: Uncomment the next line to return response Response(400, {}) or use other options such as http.Ok ...
-	// return Response(400, nil),nil
+	// Begin transaction
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), fmt.Errorf("error starting transaction: %v", err)
+	}
 
-	return Response(http.StatusNotImplemented, nil), errors.New("CreateContract method not implemented")
+	// Insert into Contract table
+	newContractID := uuid.New().String()
+	_, err = tx.ExecContext(context.Background(), `
+		INSERT INTO Contract (id, startDate, endDate, coverage, catName, breed, color, birthDate, neutered, personality, environment, weight, customerId)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		newContractID, contractReq.StartDate, contractReq.EndDate, contractReq.Coverage, contractReq.CatName, contractReq.Breed, contractReq.Color,
+		contractReq.BirthDate, contractReq.Neutered, contractReq.Personality, contractReq.Environment, contractReq.Weight, contractReq.CustomerId)
+	if err != nil {
+		tx.Rollback()
+		return Response(http.StatusInternalServerError, nil), fmt.Errorf("error inserting into Contract table: %v", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return Response(http.StatusInternalServerError, nil), fmt.Errorf("error committing transaction: %v", err)
+	}
+
+	// Respond with the new contract details
+	newContractRes := ContractRes{
+		Id:          newContractID,
+		StartDate:   contractReq.StartDate,
+		EndDate:     contractReq.EndDate,
+		Coverage:    contractReq.Coverage,
+		CatName:     contractReq.CatName,
+		Breed:       contractReq.Breed,
+		Color:       contractReq.Color,
+		BirthDate:   contractReq.BirthDate,
+		Neutered:    contractReq.Neutered,
+		Personality: contractReq.Personality,
+		Environment: contractReq.Environment,
+		Weight:      contractReq.Weight,
+		CustomerId:  contractReq.CustomerId,
+	}
+
+	return Response(http.StatusCreated, newContractRes), nil
 }
 
-// GetContract - 
+// GetContract -
 func (s *ContractAPIService) GetContract(ctx context.Context, contractId string) (ImplResponse, error) {
-	// TODO - update GetContract with the required logic for this service method.
-	// Add api_contract_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	// Retrieve database credentials
+	db, err := connectToDB()
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), fmt.Errorf("error connecting to database: %v", err)
+	}
+	defer db.Close()
 
-	// TODO: Uncomment the next line to return response Response(200, ContractRes{}) or use other options such as http.Ok ...
-	// return Response(200, ContractRes{}), nil
+	// Query to retrieve contract details with JOIN
+	var contract ContractRes
 
-	return Response(http.StatusNotImplemented, nil), errors.New("GetContract method not implemented")
+	// Perform database query
+	err = db.QueryRowContext(ctx, `
+	SELECT
+		co.id, co.startDate, co.endDate, co.coverage, co.catName, co.breed, co.color, co.birthDate, co.neutered, co.personality, co.environment, co.weight, 
+		cu.id
+	FROM
+		Contract co
+	JOIN
+		Customer cu ON co.customerId = cu.id
+	WHERE
+		co.id = ?`, contractId).Scan(
+		&contract.Id, &contract.StartDate, &contract.EndDate, &contract.Coverage, &contract.CatName, &contract.Breed, &contract.Color, &contract.BirthDate, &contract.Neutered,
+		&contract.Personality, &contract.Environment, &contract.Weight, &contract.CustomerId)
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), fmt.Errorf("error retrieving contract details: %v", err)
+	}
+
+	// Return success response with the contract details
+	return Response(http.StatusOK, contract), nil
 }
 
 // GetCustomerContracts - Get customer contracts
 func (s *ContractAPIService) GetCustomerContracts(ctx context.Context, customerId string, page int32, pageSize int32) (ImplResponse, error) {
-	// TODO - update GetCustomerContracts with the required logic for this service method.
-	// Add api_contract_service.go to the .openapi-generator-ignore to avoid overwriting this service implementation when updating open api generation.
+	// Retrieve database credentials
+	db, err := connectToDB()
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), fmt.Errorf("error connecting to database: %v", err)
+	}
+	defer db.Close()
 
-	// TODO: Uncomment the next line to return response Response(200, []ContractRes{}) or use other options such as http.Ok ...
-	// return Response(200, []ContractRes{}), nil
+	// Calculate offset based on page number and page size
+	offset := (page - 1) * pageSize
 
-	return Response(http.StatusNotImplemented, nil), errors.New("GetCustomerContracts method not implemented")
+	// Query to retrieve contract details with JOIN
+	var contracts []ContractRes
+
+	// Query to retrieve paginated contract details
+	rows, err := db.QueryContext(ctx,
+		`SELECT co.id, co.startDate, co.endDate, co.coverage, co.catName, co.breed, co.color, co.birthDate, co.neutered, co.personality, co.environment, co.weight, co.customerId
+			FROM Contract co
+			WHERE co.customerId = ?
+			ORDER BY co.customerId ASC
+			LIMIT ? OFFSET ?`, customerId, pageSize, offset)
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), fmt.Errorf("error retrieving contract details: %v", err)
+	}
+	defer rows.Close()
+
+	// Iterate over the rows and populate the contract slice
+	for rows.Next() {
+		var contract ContractRes
+		if err := rows.Scan(
+			&contract.Id, &contract.StartDate, &contract.EndDate, &contract.Coverage, &contract.CatName, &contract.Breed, &contract.Color, &contract.BirthDate, &contract.Neutered,
+			&contract.Personality, &contract.Environment, &contract.Weight, &contract.CustomerId); err != nil {
+			return Response(http.StatusInternalServerError, nil), fmt.Errorf("error scanning contract details: %v", err)
+		}
+
+		// Append contract details to the contract slice
+		contracts = append(contracts, contract)
+	}
+
+	// Check for errors during rows iteration
+	if err := rows.Err(); err != nil {
+		return Response(http.StatusInternalServerError, nil), fmt.Errorf("error iterating over contract details: %v", err)
+	}
+
+	// Return success response with the customer details
+	return Response(http.StatusOK, contracts), nil
 }

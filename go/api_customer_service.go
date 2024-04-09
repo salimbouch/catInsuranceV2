@@ -42,7 +42,7 @@ func getDBCredentials() (DBCredentials, error) {
 	var dbCredentials DBCredentials
 
 	region := "eu-central-1"
-	secretName := "prod/catInsurance/mysql"
+	secretName := "prod/v2/sql"
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(region),
