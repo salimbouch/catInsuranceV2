@@ -84,6 +84,11 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 		return err
 	}
 	wHeader.Set("Content-Type", "application/json; charset=UTF-8")
+	wHeader.Set("Access-Control-Allow-Credentials", "true")
+	wHeader.Set("Access-Control-Allow-Headers", "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token")
+	wHeader.Set("Access-Control-Allow-Methods", "GET,OPTIONS,POST")
+	wHeader.Set("Access-Control-Allow-Origin", "*")
+	wHeader.Set("Access-Control-Expose-Headers", "ocp-apim-subscription-key")
 
 	if status != nil {
 		w.WriteHeader(*status)

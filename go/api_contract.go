@@ -19,7 +19,7 @@ import (
 
 // ContractAPIController binds http requests to an api service and writes the service results to the http response
 type ContractAPIController struct {
-	service ContractAPIServicer
+	service      ContractAPIServicer
 	errorHandler ErrorHandler
 }
 
@@ -127,7 +127,7 @@ func (c *ContractAPIController) CreateContract(w http.ResponseWriter, r *http.Re
 	EncodeJSONResponse(result.Body, &result.Code, w)
 }
 
-// GetContract - 
+// GetContract -
 func (c *ContractAPIController) GetContract(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	contractIdParam := params["contractId"]
